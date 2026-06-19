@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>English Reader</title>
+
+<style>
+
+*{
+    box-sizing:border-box;
+}
+
+body{
+    margin:0;
+    font-family:Arial, sans-serif;
+    background-color: #f9f9f9;
+}
+
+.container{
+    max-width: 900px;
+    margin: 0 auto;
+    height:100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Bài đọc */
+
+.reader{
+    flex:1;
+    padding: 20px 20px 55vh 20px; 
+    overflow-y:auto;
+    background: #fff;
+    box-shadow: 0 0 10px rgba(0,0,0,0.05);
+}
+
+#content{
+    font-size:26px;
+    line-height:1.2; /* Thu nhỏ line-height lại vì đã có gap giữa các dòng */
+    margin-top: 10px; 
+}
+
+/* Định dạng đoạn văn & Đánh số */
+.paragraph {
+    display: flex;
+    margin-bottom: 35px; /* Tăng khoảng cách giữa các đoạn */
+}
+
+.para-num {
+    color: #b0b0b0;
+    font-size: 14px;
+    min-width: 30px;
+    user-select: none;
+    padding-top: 4px;
+    font-weight: bold;
+}
+
+/* Container chứa các cụm từ - cho phép tự động rớt dòng */
+.para-content {
+    flex: 1;
+    display: flex;
+    flex-wrap: wrap; /* Tự động xuống dòng khi hết chỗ */
+    gap: 20px 8px; /* 20px khoảng cách dòng, 8px khoảng cách giữa các từ */
+    align-items: flex-start;
+}
+
+/* Khối ghép cặp 1 từ tiếng Anh và 1 từ phiên âm */
+.word-pair {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center; /* Căn giữa phiên âm ngay dưới từ */
+}
+
+/* Từ tiếng Anh */
+.word{
+    cursor:pointer;
+    border-radius:4px;
+    padding:2px 4px;
+    transition:0.2s;
+    text-align: center;
+}
+
+.word:hover{
+    background:#fff3a0;
+}
+
+.word.active{
+    background:#ffe082;
+}
+
+/* Từ phiên âm */
+.trans-word {
+    font-size: 0.6em; /* Tỉ lệ kích thước phiên âm so với từ tiếng anh */
+    color: #666;
+    margin-top: 2px;
+    text-align: center;
+    user-select: none;
+}
+
+/* Cụm nút nổi (Floating Action Buttons) */
+.fab-container {
+    position: fixed;
+    right: 20px;
+    bottom: 40px; 
+    display: flex;
+    flex-direction: column; 
+    gap: 12px; 
+    z-index: 998; 
+}
+
+.fab-btn {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%; 
+    background-color: #ffffff;
+    border: 1px solid #e0e0e0;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15); 
+    font-size: 18px;
+    font-weight: bold;
+    color: #333;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.1s, background-color 0.2s;
+    -webkit-tap-highlight-color: transparent; 
+}
+
+.fab-btn:active {
+    transform: scale(0.9); 
+    background-color: #f0f0f0;
+}
+
+/* Panel từ điển dạng Bottom Sheet */
+
+.dictionary{
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translate(-50%, 100%); 
+    width: 100%;
+    max-width: 500px; 
+    max-height: 50vh; 
+    border-radius: 16px 16px 0 0; 
+    padding: 30px 20px 20px 20px; 
+    overflow-y: auto;
+    background: #fafafa;
+    box-shadow: 0 -5px 25px rgba(0,0,0,0.15);
+    z-index: 1000;
+    
+    visibility: hidden;
+    transition: transform 0.3s ease-out, visibility 0.3s;
+}
+
+.dictionary.show {
+    transform: translate(-50%, 0);
+    visibility: visible;
+}
+
+.close-btn {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 20px;
+    color: #aaa;
+    cursor: pointer;
+    padding: 5px;
+    user-select: none;
+}
+
+.close-btn:hover {
+    color: #333;
+}
+
+#selectedWord{
+    font-size:26px;
+    font-weight:bold;
+    margin-bottom: 5px;
+    color: #333;
+}
+
+#phonetic{
+    color:#666;
+    font-size:16px;
+}
+
+#audioBtn{
+    font-size:24px;
+    cursor:pointer;
+    margin-left:10px;
+    vertical-align: middle;
+}
+
+.section{
+    margin-top:15px;
+    font-size: 15px;
+    color: #444;
+}
+
+.section b {
+    color: #111;
+    display: inline-block;
+    margin-bottom: 3px;
+}
+
+.loading{
+    color:#777;
+    font-style: italic;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="reader">
+        <div id="content">
+            Đang tải nội dung...
+        </div>
+    </div>
+
+    <div class="fab-container">
+        <button class="fab-btn" onclick="changeFontSize(2)">A+</button>
+        <button class="fab-btn" onclick="changeFontSize(-2)">A-</button>
+    </div>
+
+    <div class="dictionary" id="dictionaryPopup">
+        
+        <span class="close-btn" onclick="closeDictionary()">✕</span>
+
+        <div id="selectedWord">
+            Click vào một từ
+        </div>
+
+        <div>
+            <span id="phonetic"></span>
+            <span id="audioBtn" onclick="playAudio()">🔊</span>
+        </div>
+
+        <div class="section">
+            <b>Nghĩa tiếng Việt</b>
+            <div id="meaning"></div>
+        </div>
+
+        <div class="section">
+            <b>Loại từ</b>
+            <div id="partOfSpeech"></div>
+        </div>
+
+        <div class="section">
+            <b>Định nghĩa tiếng Anh</b>
+            <div id="definition"></div>
+        </div>
+
+        <div class="section">
+            <b>Ví dụ</b>
+            <div id="example"></div>
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+
+let currentFontSize = 26;
+let currentAudio = null;
+let repeatCount = 1; 
+
+askRepeatCount();
+loadText();
+
+function askRepeatCount() {
+    let input = prompt("Nhập số lần bạn muốn đọc lại từ liên tục:", "");
+    let parsed = parseInt(input);
+    if (!isNaN(parsed) && parsed > 0) {
+        repeatCount = parsed;
+    } else {
+        repeatCount = 1; 
+    }
+}
+
+/* ------------------------- */
+/* Đọc file google docs, chia từ và ghép cặp với phiên âm */
+/* ------------------------- */
+
+function loadText(){
+
+    fetch("https://script.google.com/macros/s/AKfycbxI0EO2Q5nOVkEaj7YQIaCU_PxGwzk9oI9j3ZT05k2mNfLoflgE7f0akAXQXWMepZXp/exec")
+    .then(res => res.text())
+    .then(text => {
+
+        // Cắt dữ liệu thành 2 phần dựa trên dòng chữ TRANSCRIPTION
+        const parts = text.split(/TRANSCRIPTION/);
+        const engText = parts[0] || "";
+        const transText = parts[1] || "";
+
+        // Tách thành các đoạn (xóa những đoạn rỗng)
+        const engParagraphs = engText.split(/\r?\n+/).filter(p => p.trim() !== "");
+        const transParagraphs = transText.split(/\r?\n+/).filter(p => p.trim() !== "");
+
+        let html = "";
+        let paraCount = 1;
+
+        const maxLen = Math.max(engParagraphs.length, transParagraphs.length);
+
+        for (let i = 0; i < maxLen; i++) {
+            let ePara = engParagraphs[i] || "";
+            let tPara = transParagraphs[i] || "";
+
+            if (ePara === "" && tPara === "") continue;
+
+            let paraHtml = `
+            <div class="paragraph">
+                <div class="para-num">${paraCount}</div>
+                <div class="para-content">`;
+
+            // Tách các đoạn thành từng từ dựa trên khoảng trắng
+            const eWords = ePara.trim().split(/\s+/);
+            const tWords = tPara.trim().split(/\s+/);
+            
+            // Lặp theo mảng có số lượng từ nhiều hơn (để tránh sót từ)
+            const wordCount = Math.max(eWords.length, tWords.length);
+
+            for (let j = 0; j < wordCount; j++) {
+                let eW = eWords[j] || "";
+                let tW = tWords[j] || "";
+                
+                if (eW === "" && tW === "") continue;
+
+                // Tạo một khối bọc cặp (Từ + Phiên âm)
+                paraHtml += `
+                    <div class="word-pair">
+                        <span class="word">${eW}</span>
+                        <span class="trans-word">${tW}</span>
+                    </div>`;
+            }
+
+            paraHtml += `
+                </div>
+            </div>`;
+
+            html += paraHtml;
+            paraCount++;
+        }
+
+        document.getElementById("content").innerHTML = html;
+
+        attachEvents();
+    })
+    .catch(err=>{
+        console.error(err);
+        document.getElementById("content").innerHTML =
+            "Không tải được dữ liệu từ Google Docs";
+    });
+
+}
+
+/* ------------------------- */
+
+function attachEvents(){
+
+    document.querySelectorAll(".word")
+    .forEach(word => {
+
+        word.addEventListener("click", async () => {
+
+            document
+                .querySelectorAll(".word")
+                .forEach(w => w.classList.remove("active"));
+
+            word.classList.add("active");
+
+            let cleanWord =
+                word.innerText
+                .toLowerCase()
+                .replace(/[^a-z'-]/g,'');
+
+            if(cleanWord){
+                await lookupWord(cleanWord);
+            }
+
+        });
+
+    });
+
+}
+
+/* ------------------------- */
+
+function changeFontSize(delta){
+
+    currentFontSize += delta;
+
+    if(currentFontSize < 14)
+        currentFontSize = 14;
+
+    document.getElementById("content")
+        .style.fontSize = currentFontSize + "px";
+
+}
+
+/* ------------------------- */
+/* Hàm Đóng / Mở Popup */
+/* ------------------------- */
+
+function openDictionary() {
+    document.getElementById("dictionaryPopup").classList.add("show");
+}
+
+function closeDictionary() {
+    document.getElementById("dictionaryPopup").classList.remove("show");
+    document.querySelectorAll(".word").forEach(w => w.classList.remove("active"));
+    
+    if(window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+    }
+}
+
+/* ------------------------- */
+/* Tự động đóng popup khi bấm ra vùng trống bên ngoài */
+/* ------------------------- */
+document.addEventListener("click", function(e) {
+    const popup = document.getElementById("dictionaryPopup");
+    
+    if (popup.classList.contains("show")) {
+        if (!e.target.closest(".word-pair") && !e.target.closest(".dictionary") && !e.target.closest(".fab-container")) {
+            closeDictionary();
+        }
+    }
+});
+
+/* ------------------------- */
+
+async function lookupWord(word){
+
+    openDictionary();
+
+    document.getElementById("selectedWord")
+        .innerText = word;
+
+    document.getElementById("phonetic")
+        .innerText = "...";
+
+    document.getElementById("meaning")
+        .innerHTML =
+        "<span class='loading'>Đang tra cứu...</span>";
+
+    document.getElementById("definition")
+        .innerHTML = "";
+
+    document.getElementById("example")
+        .innerHTML = "";
+
+    document.getElementById("partOfSpeech")
+        .innerHTML = "";
+
+    currentAudio = null;
+
+    try{
+
+        const dictRes = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
+        const dictData = await dictRes.json();
+
+        let phonetic = "";
+        let definition = "";
+        let example = "";
+        let partOfSpeech = "";
+
+        if(Array.isArray(dictData)){
+
+            phonetic = dictData[0].phonetic || "";
+
+            const phonetics = dictData[0].phonetics || [];
+            const audioObj = phonetics.find(p => p.audio && p.audio.length > 0);
+
+            if(audioObj){
+                currentAudio = audioObj.audio;
+            }
+
+            if(dictData[0].meanings?.length){
+
+                const firstMeaning = dictData[0].meanings[0];
+                partOfSpeech = firstMeaning.partOfSpeech || "";
+
+                if(firstMeaning.definitions?.length){
+
+                    definition = firstMeaning.definitions[0].definition || "";
+                    example = firstMeaning.definitions[0].example || "";
+
+                }
+
+            }
+
+        }
+
+        document.getElementById("phonetic").innerText = phonetic;
+        document.getElementById("definition").innerText = definition;
+        document.getElementById("example").innerText = example;
+        document.getElementById("partOfSpeech").innerText = partOfSpeech;
+
+        const transRes = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=vi&dt=t&q=${encodeURIComponent(word)}`);
+        const transData = await transRes.json();
+        const vietnamese = transData[0].map(item => item[0]).join("");
+
+        document.getElementById("meaning").innerText = vietnamese;
+
+        playMultipleTimes(word);
+
+    }
+    catch(err){
+
+        console.error(err);
+        document.getElementById("meaning").innerText = "Không tìm thấy.";
+
+    }
+
+}
+
+/* ------------------------- */
+/* Hàm phát thanh đa năng hỗ trợ lặp từ */
+/* ------------------------- */
+function playMultipleTimes(word) {
+    if(window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+    }
+
+    let count = 0;
+
+    function playNext() {
+        if (count >= repeatCount) return; 
+
+        if (currentAudio) {
+            let audio = new Audio(currentAudio);
+            audio.addEventListener('ended', () => {
+                count++;
+                setTimeout(playNext, 300); 
+            });
+            audio.play().catch(err => {
+                fallbackTTS();
+            });
+        } else {
+            fallbackTTS();
+        }
+    }
+
+    function fallbackTTS() {
+        if (count >= repeatCount) return;
+        const utter = new SpeechSynthesisUtterance(word);
+        utter.lang = "en-US";
+        utter.onend = function() {
+            count++;
+            setTimeout(playNext, 300);
+        };
+        speechSynthesis.speak(utter);
+    }
+
+    playNext();
+}
+
+function playAudio(){
+    const word = document.getElementById("selectedWord").innerText;
+
+    if(!word || word === "Click vào một từ" || word === "đang tra cứu...")
+        return;
+
+    playMultipleTimes(word);
+}
+
+</script>
+
+</body>
+</html>
